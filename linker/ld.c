@@ -33,10 +33,10 @@ int main(int argc, char *argv[])
 
 void generate_elf(FILE *fin, FILE *fout)
 {
-  char bufin[0x100000];
-  char bufout[0X100000];
+  char *bufin = malloc(sizeof(char) * (1 << 22));
+  char *bufout = malloc(sizeof(char) * (1 << 22));
 
-  fread(bufin, 1, 0x400000, fin);
+  fread(bufin, 1, 0x0400000, fin);
 
   Elf64_Ehdr *fhin = malloc(sizeof(Elf64_Ehdr));
   Elf64_Ehdr *fhout = malloc(sizeof(Elf64_Ehdr));
@@ -68,59 +68,62 @@ void generate_elf(FILE *fin, FILE *fout)
   Elf64_Shdr **shin = malloc(sizeof(Elf64_Shdr*) * fhin->e_shnum);
   Elf64_Shdr **shout = malloc(sizeof(Elf64_Shdr*) * fhin->e_shnum);
 
+  phAX->p_offset = 0x0000;
+  phAX->p_filesz = sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr) * 3;
+  phAX->p_memsz = phAX->p_filesz;
+  phAW->p_offset = 0x1000;
+  phA->p_offset = 0x2000;
+
   for (size_t i = 0; i < fhin->e_shnum; ++i)
   {
     shin[i] = malloc(sizeof(Elf64_Shdr));
     memcpy(shin[i], bufin + fhin->e_shoff + i * fhin->e_shentsize, sizeof(Elf64_Shdr));
-    if (shin[i]->sh_type == SHT_NOBITS)
+    if (shin[i]->sh_type == SHT_NOBITS){
+      shout[i] = NULL;
       continue;
+    }
 
     shout[i] = malloc(sizeof(Elf64_Shdr));
     memcpy(shout[i], shin[i], sizeof(Elf64_Shdr));
 
     if ((shin[i]->sh_flags & (SHF_WRITE | SHF_ALLOC)) == (SHF_WRITE | SHF_ALLOC)) {
       phAW->p_filesz += shin[i]->sh_size;
+      shout[i]->sh_offset = phAW->p_offset + phAW->p_memsz;
       phAW->p_memsz += shin[i]->sh_size;
     }
     else if ((shin[i]->sh_flags & (SHF_ALLOC | SHF_EXECINSTR)) == (SHF_ALLOC | SHF_EXECINSTR)) {
       phAX->p_filesz += shin[i]->sh_size;
+      shout[i]->sh_offset = phAX->p_offset + phAX->p_memsz;
       phAX->p_memsz += shin[i]->sh_size;
     }
     else if ((shin[i]->sh_flags & SHF_ALLOC) == SHF_ALLOC) {
       phA->p_filesz += shin[i]->sh_size;
-      phA->p_memsz += shin[i]->sh_size;
-    } else
-      continue;
-  }
-
-  phAX->p_offset = 0;
-  phAW->p_offset = phAX->p_filesz;
-  phA->p_offset = phAW->p_offset + phAW->p_filesz;
-  phAX->p_vaddr = 0x400000;
-  phAW->p_vaddr = phAX->p_vaddr + phAX->p_memsz;
-  phA->p_vaddr = phAW->p_vaddr + phAW->p_memsz;
-  phAX->p_paddr = phAX->p_paddr;
-  phAW->p_paddr = phAW->p_paddr;
-  phA->p_paddr = phA->p_paddr;
-
-  for (size_t i = 0; i < fhin->e_shnum; ++i)
-  {
-    if (!shout[i])
-      continue;
-    if ((shout[i]->sh_flags & (SHF_WRITE | SHF_ALLOC)) == (SHF_WRITE | SHF_ALLOC)) {
-      shout[i]->sh_offset = phAW->p_offset + phAW->p_memsz;
-    }
-    else if ((shout[i]->sh_flags & (SHF_ALLOC | SHF_EXECINSTR)) == (SHF_ALLOC | SHF_EXECINSTR)) {
-      shout[i]->sh_offset = phAX->p_offset + phAX->p_memsz;
-    }
-    else if ((shout[i]->sh_flags & SHF_ALLOC) == SHF_ALLOC) {
       shout[i]->sh_offset = phA->p_offset + phA->p_memsz;
+      phA->p_memsz += shin[i]->sh_size;
+    } else {
+      free(shout[i]);
+      shout[i] = NULL;
+      continue;
     }
   }
+
+  phAX->p_vaddr = 0x400000 + phAX->p_offset;
+  phAW->p_vaddr = 0x400000 + phAW->p_offset;
+  phA->p_vaddr = 0x400000 + phA->p_offset;
+  phAX->p_paddr = phAX->p_vaddr;
+  phAW->p_paddr = phAW->p_vaddr;
+  phA->p_paddr = phA->p_vaddr;
 
   // RELLOCATIOOOOOOOON
 
-  fhout->e_entry = (unsigned long long)(phAX->p_vaddr | phAX->p_align | 0xDC); //DC SYMTAB
+  for (size_t i = 0; i < fhin->e_shnum; ++i)
+  {
+    
+  }
+
+  fhout->e_entry = (phAX->p_vaddr | 0xdc)
+                 + (sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr) * 3); //start SYMTAB
+
   fhout->e_shoff = 0; // phA->p_offset + phA->p_filesz;
   fhout->e_phnum = 3;
   fhout->e_shnum = 0;
@@ -140,11 +143,16 @@ void generate_elf(FILE *fin, FILE *fout)
   for (size_t i = 0; i < fhin->e_shnum; ++i){
     if (!shout[i])
       continue;
-    memcpy(bufout + shout[i]->sh_offset, bufin + shin[i]->sh_offset, shout[i]->sh_size);
+    memcpy(bufout + shout[i]->sh_offset, bufin + shin[i]->sh_offset,
+           shout[i]->sh_size);
     offset += shout[i]->sh_size;
   }
 
+  offset = phA->p_offset + phA->p_filesz;
+
   fwrite(bufout, 1, offset, fout);
+
+  printf("offset: %zu\n", offset);
 
   for (size_t i = 0; i < fhin->e_shnum; ++i){
     free(shin[i]);
@@ -158,5 +166,8 @@ void generate_elf(FILE *fin, FILE *fout)
   free(phAX);
   free(fhout);
   free(fhin);
+
+  free(bufout);
+  free(bufin);
 }
 

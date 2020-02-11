@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 
 void generate_elf(FILE *fin, FILE *fout);
 
@@ -27,6 +28,7 @@ int main(int argc, char *argv[])
 
   fclose(fin);
   fclose(fout);
+  chmod(argv[nbf == 1 ? 3:2], 0754);
 
   return EXIT_SUCCESS;
 }
@@ -114,20 +116,38 @@ void generate_elf(FILE *fin, FILE *fout)
   phAW->p_paddr = phAW->p_vaddr;
   phA->p_paddr = phA->p_vaddr;
 
-  // RELLOCATIOOOOOOOON
+  Elf64_Rela *rela;
+
+  size_t entry_offset = 0;
+  Elf64_Shdr *symtab;
+  Elf64_Sym *sym;
 
   for (size_t i = 0; i < fhin->e_shnum; ++i)
   {
-    
+    if (shin[i]->sh_type == SHT_SYMTAB)
+    {
+      symtab = shin[i];
+      for (sym = (void*)(bufin + shin[i]->sh_offset);
+          (char*)sym < (char*)(bufin + shin[i]->sh_offset + shin[i]->sh_size);
+          ++sym)
+      {
+        Elf64_Shdr* tmpstrtab = shin[shin[i]->sh_link];
+
+        if (!strcmp("_start", bufin + tmpstrtab->sh_offset+ sym->st_name)
+            && ELF64_ST_TYPE(sym->st_info) == STT_FUNC)
+        {
+          entry_offset = shout[sym->st_shndx]->sh_offset + sym->st_value;
+        }
+      }
+    }
   }
 
-  fhout->e_entry = (phAX->p_vaddr | 0xdc)
-                 + (sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr) * 3); //start SYMTAB
+  fhout->e_entry =  (phAX->p_vaddr + entry_offset);
 
-  fhout->e_shoff = 0; // phA->p_offset + phA->p_filesz;
+  fhout->e_shoff = 0;
   fhout->e_phnum = 3;
   fhout->e_shnum = 0;
-  fhout->e_shstrndx = 0;// OSBLC
+  fhout->e_shstrndx = 0; // OSBLC
 
   size_t offset = 0;
 
@@ -150,9 +170,42 @@ void generate_elf(FILE *fin, FILE *fout)
 
   offset = phA->p_offset + phA->p_filesz;
 
-  fwrite(bufout, 1, offset, fout);
+  for (size_t i = 0; i < fhin->e_shnum; ++i)
+  {
+    if (shin[i]->sh_type == SHT_RELA)
+    {
+      // sh info -> to relocate
+      // sh link -> sym
+      // ELF64_R_TYPE(i)
+      // ELF64_R_SYM(i)
 
-  printf("offset: %zu\n", offset);
+      sym = (void*)(bufin + symtab->sh_offset);
+
+      for (rela = (void*)(bufin + shin[i]->sh_offset);
+          (char*)rela < (char*)(bufin + shin[i]->sh_offset + shin[i]->sh_size);
+          ++rela)
+      {
+        Elf64_Sym *tmpsym = sym + ELF64_R_SYM(rela->r_info);
+
+        if (ELF64_R_TYPE(rela->r_info) == 1) // R_X86_64_64
+        {
+          *((uint32_t*)(bufout + shout[shin[i]->sh_info]->sh_offset
+            + rela->r_offset)) = shout[tmpsym->st_shndx]->sh_offset
+                               + tmpsym->st_value + 0x400000 + rela->r_addend;
+        }
+        else if (ELF64_R_TYPE(rela->r_info) == 2) // R_X86_64_PC32
+        {
+          *((uint32_t*)(bufout + shout[shin[i]->sh_info]->sh_offset
+            + rela->r_offset)) = shout[tmpsym->st_shndx]->sh_offset
+                               + tmpsym->st_value + 0x400000 + rela->r_addend
+                               - (0x400000 + shout[shin[i]->sh_info]->sh_offset
+                                  + rela->r_offset);
+        }
+      }
+    }
+  }
+
+  fwrite(bufout, 1, offset, fout);
 
   for (size_t i = 0; i < fhin->e_shnum; ++i){
     free(shin[i]);

@@ -1,6 +1,6 @@
 CC=gcc
-CCFLAGS= -save-temps -pedantic -std=c99 -Wall -Wextra -Werror
-SRC=main.c
+CCFLAGS= -g -pedantic -std=c99 -Wall -Wextra -Werror
+SRC=ld.c
 
 .PHONY: clean
 

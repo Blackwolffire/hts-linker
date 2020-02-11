@@ -174,11 +174,6 @@ void generate_elf(FILE *fin, FILE *fout)
   {
     if (shin[i]->sh_type == SHT_RELA)
     {
-      // sh info -> to relocate
-      // sh link -> sym
-      // ELF64_R_TYPE(i)
-      // ELF64_R_SYM(i)
-
       sym = (void*)(bufin + symtab->sh_offset);
 
       for (rela = (void*)(bufin + shin[i]->sh_offset);
@@ -219,7 +214,6 @@ void generate_elf(FILE *fin, FILE *fout)
   free(phAX);
   free(fhout);
   free(fhin);
-
   free(bufout);
   free(bufin);
 }

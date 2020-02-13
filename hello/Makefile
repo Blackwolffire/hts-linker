@@ -1,10 +1,10 @@
 CC=gcc
-CCFLAGS= -g -pedantic -std=c99 -Wall -Wextra -Werror
-SRC=my_ld.c
+CCFLAGS= -std=c99 -Wall -Wextra -Werror
+SRC=hello.c
 
 .PHONY: clean
 
-my_ld:
+hello:
 	${CC} ${SRC} ${CCFLAGS} -o ${SRC:.c=}
 
 clean:

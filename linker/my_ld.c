@@ -130,7 +130,7 @@ void recolation(char* bufin, char* bufout, Elf64_Ehdr* fhin, Elf64_Shdr** shin,
 
         if (ELF64_R_TYPE(rela->r_info) == 1) // R_X86_64_64
         {
-          *((uint32_t*)(bufout + shout[shin[i]->sh_info]->sh_offset
+          *((uint64_t*)(bufout + shout[shin[i]->sh_info]->sh_offset
             + rela->r_offset)) = shout[tmpsym->st_shndx]->sh_offset
                                + tmpsym->st_value + VBASE + rela->r_addend;
         }

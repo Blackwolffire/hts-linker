@@ -42,7 +42,7 @@ void setup_Ehdr(Elf64_Ehdr* fhout, Elf64_Ehdr* fhin)
   fhout->e_type = ET_EXEC;
   fhout->e_phoff = 0x040;
   fhout->e_phentsize = sizeof(Elf64_Phdr);
-  fhout->e_shentsize = 0;//sizeof(Elf64_Shdr);
+  fhout->e_shentsize = sizeof(Elf64_Shdr);
 }
 
 void setup_Phdr(Elf64_Phdr *phAX, Elf64_Phdr* phAW, Elf64_Phdr* phA)
@@ -192,7 +192,10 @@ void generate_elf(FILE *fin, FILE *fout)
       phAX->p_memsz += shin[i]->sh_size;
     }
     else if ((shin[i]->sh_flags & SHF_ALLOC) == SHF_ALLOC
-             || shin[i]->sh_type == SHT_PROGBITS) {
+             || shin[i]->sh_type == SHT_PROGBITS
+             || (shin[i]->sh_type == SHT_STRTAB))
+    {
+
       phA->p_filesz += shin[i]->sh_size;
       shout[i]->sh_offset = phA->p_offset + phA->p_memsz;
       phA->p_memsz += shin[i]->sh_size;
@@ -210,10 +213,7 @@ void generate_elf(FILE *fin, FILE *fout)
 
   fhout->e_entry =  (phAX->p_vaddr + entry_offset);
 
-  fhout->e_shoff = 0;
   fhout->e_phnum = 3;
-  fhout->e_shnum = 0;
-  fhout->e_shstrndx = 0; // OSBLC
 
   size_t offset = 0;
 
@@ -238,6 +238,25 @@ void generate_elf(FILE *fin, FILE *fout)
 
   recolation(bufin, bufout, fhin, shin, shout, symtab);
 
+  free(fhout);
+  fhout = (void*)bufout;
+  fhout->e_shoff = offset;
+  fhout->e_shnum = 0;
+  fhout->e_shstrndx = 0; // OSBLC
+
+  for (size_t i = 0; i < fhin->e_shnum; ++i)
+    if (shout[i])
+    {
+      memcpy(bufout + offset, shout[i], sizeof(Elf64_Shdr));
+      offset += sizeof(Elf64_Shdr);
+      if (shout[i]->sh_type == SHT_STRTAB
+          && !strcmp((char*)(bufin + shin[fhin->e_shstrndx]->sh_offset + shin[i]->sh_name),
+                     ".shstrtab"))
+        fhout->e_shstrndx = fhout->e_shnum;
+      ++fhout->e_shnum;
+    }
+
+
   fwrite(bufout, 1, offset, fout);
 
   for (size_t i = 0; i < fhin->e_shnum; ++i){
@@ -250,7 +269,6 @@ void generate_elf(FILE *fin, FILE *fout)
   free(phA);
   free(phAW);
   free(phAX);
-  free(fhout);
   free(fhin);
   free(bufout);
   free(bufin);

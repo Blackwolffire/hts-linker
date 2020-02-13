@@ -1,5 +1,5 @@
 CC=gcc
-CCFLAGS= -g -pedantic -std=c99 -Wall -Wextra -Werror
+CCFLAGS= -pedantic -std=c99 -Wall -Wextra -Werror
 SRC=my_ld.c
 
 .PHONY: clean

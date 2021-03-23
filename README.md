@@ -4,7 +4,6 @@ HTS
 Repository Architecture:
 
 * deadline: Sunday, Feb 23, 2020
-* repository: `git@git.cri.epita.fr:p/${promo}-sys/hts-${login}.git`
 * directories:
     - linker: contains the "linker" exercise
     - hello: https://lse.epita.fr/teaching/epita/sexp/ing2/hts.html#hello-world
